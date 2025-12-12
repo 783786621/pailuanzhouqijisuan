@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>排卵周期计算器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+        body {
+            background-color: #f5f7fa;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #2d3748;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #4a5568;
+            font-weight: 500;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+        input:focus {
+            outline: none;
+            border-color: #4299e1;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #3182ce;
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 6px;
+            background-color: #f0f8fb;
+            display: none;
+        }
+        .result h2 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        .result-item {
+            margin-bottom: 10px;
+            color: #4a5568;
+            font-size: 16px;
+        }
+        .highlight {
+            color: #e53e3e;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>排卵周期计算器</h1>
+        
+        <div class="form-group">
+            <label for="lastPeriod">上一次月经开始日期</label>
+            <input type="date" id="lastPeriod" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="cycleLength">月经周期长度（天）</label>
+            <input type="number" id="cycleLength" min="21" max="35" value="28" required>
+            <small style="color: #718096; font-size: 14px; margin-top: 5px; display: block;">通常为21-35天，默认28天</small>
+        </div>
+        
+        <button id="calculateBtn">计算排卵周期</button>
+        
+        <div class="result" id="result">
+            <h2>计算结果</h2>
+            <div class="result-item">预计排卵日：<span id="ovulationDay" class="highlight"></span></div>
+            <div class="result-item">排卵期：<span id="fertilePeriod" class="highlight"></span></div>
+            <div class="result-item">安全期（相对）：<span id="safePeriod"></span></div>
+            <div class="result-item">下一次月经预计：<span id="nextPeriod" class="highlight"></span></div>
+        </div>
+    </div>
+
+    <script>
+        // 计算排卵周期核心逻辑
+        document.getElementById('calculateBtn').addEventListener('click', function() {
+            const lastPeriod = new Date(document.getElementById('lastPeriod').value);
+            const cycleLength = parseInt(document.getElementById('cycleLength').value);
+            
+            // 验证输入
+            if (!lastPeriod || isNaN(cycleLength)) {
+                alert('请填写完整且有效的信息！');
+                return;
+            }
+            
+            // 计算关键日期（排卵日=周期长度-14天）
+            const ovulationDay = new Date(lastPeriod);
+            ovulationDay.setDate(lastPeriod.getDate() + cycleLength - 14);
+            
+            // 排卵期（排卵日前后4天，共9天）
+            const fertileStart = new Date(ovulationDay);
+            fertileStart.setDate(ovulationDay.getDate() - 4);
+            const fertileEnd = new Date(ovulationDay);
+            fertileEnd.setDate(ovulationDay.getDate() + 4);
+            
+            // 下一次月经日期
+            const nextPeriod = new Date(lastPeriod);
+            nextPeriod.setDate(lastPeriod.getDate() + cycleLength);
+            
+            // 安全期（月经结束后到排卵期前，排卵后到下次月经前）
+            // 假设经期5天（可根据实际调整，这里做通用处理）
+            const periodEnd = new Date(lastPeriod);
+            periodEnd.setDate(lastPeriod.getDate() + 5);
+            const safe1Start = new Date(lastPeriod);
+            const safe1End = new Date(fertileStart);
+            safe1End.setDate(fertileStart.getDate() - 1);
+            const safe2Start = new Date(fertileEnd);
+            safe2Start.setDate(fertileEnd.getDate() + 1);
+            const safe2End = new Date(nextPeriod);
+            
+            // 格式化日期为YYYY-MM-DD
+            function formatDate(date) {
+                return date.toISOString().split('T')[0];
+            }
+            
+            // 填充结果
+            document.getElementById('ovulationDay').textContent = formatDate(ovulationDay);
+            document.getElementById('fertilePeriod').textContent = `${formatDate(fertileStart)} 至 ${formatDate(fertileEnd)}`;
+            document.getElementById('safePeriod').textContent = `${formatDate(safe1Start)} 至 ${formatDate(safe1End)}、${formatDate(safe2Start)} 至 ${formatDate(safe2End)}`;
+            document.getElementById('nextPeriod').textContent = formatDate(nextPeriod);
+            
+            // 显示结果
+            document.getElementById('result').style.display = 'block';
+        });
+    </script>
+</body>
+</html>
