@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>排卵周期计算器</title>
+    <title>智能排卵周期记录计算器</title>
     <style>
         * {
             margin: 0;
@@ -16,7 +16,7 @@
             padding: 20px;
         }
         .container {
-            max-width: 600px;
+            max-width: 800px;
             margin: 0 auto;
             background: white;
             padding: 30px;
@@ -27,6 +27,29 @@
             text-align: center;
             color: #2d3748;
             margin-bottom: 30px;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 25px;
+        }
+        .tab {
+            padding: 12px 20px;
+            cursor: pointer;
+            color: #4a5568;
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        .tab.active {
+            color: #4299e1;
+            border-bottom-color: #4299e1;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
         }
         .form-group {
             margin-bottom: 20px;
@@ -49,8 +72,12 @@
             border-color: #4299e1;
             box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
         }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
         button {
-            width: 100%;
             padding: 14px;
             background-color: #4299e1;
             color: white;
@@ -60,18 +87,34 @@
             font-weight: 600;
             cursor: pointer;
             transition: background-color 0.3s;
+            flex: 1;
         }
         button:hover {
             background-color: #3182ce;
         }
-        .result {
-            margin-top: 30px;
+        button.secondary {
+            background-color: #718096;
+        }
+        button.secondary:hover {
+            background-color: #4a5568;
+        }
+        button.danger {
+            background-color: #e53e3e;
+        }
+        button.danger:hover {
+            background-color: #c53030;
+        }
+        .result, .history-list {
+            margin-top: 20px;
             padding: 20px;
             border-radius: 6px;
             background-color: #f0f8fb;
-            display: none;
         }
-        .result h2 {
+        .history-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .result h2, .history-list h2 {
             color: #2d3748;
             margin-bottom: 15px;
             font-size: 18px;
@@ -85,70 +128,216 @@
             color: #e53e3e;
             font-weight: 600;
         }
+        .history-item {
+            padding: 15px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .history-item:last-child {
+            border-bottom: none;
+        }
+        .history-info {
+            flex: 1;
+        }
+        .history-date {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+        .history-cycle {
+            color: #718096;
+            font-size: 14px;
+        }
+        .history-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .history-actions button {
+            padding: 6px 10px;
+            font-size: 14px;
+            flex: none;
+        }
+        .empty-tip {
+            text-align: center;
+            padding: 30px;
+            color: #718096;
+            font-size: 16px;
+        }
+        .note {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #fef7fb;
+            border-radius: 4px;
+            color: #718096;
+            font-size: 14px;
+            border-left: 3px solid #ed8936;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>排卵周期计算器</h1>
+        <h1>智能排卵周期记录计算器</h1>
         
-        <div class="form-group">
-            <label for="lastPeriod">上一次月经开始日期</label>
-            <input type="date" id="lastPeriod" required>
+        <!-- 标签页 -->
+        <div class="tabs">
+            <div class="tab active" data-tab="calculate">计算排卵</div>
+            <div class="tab" data-tab="history">历史记录</div>
         </div>
         
-        <div class="form-group">
-            <label for="cycleLength">月经周期长度（天）</label>
-            <input type="number" id="cycleLength" min="21" max="35" value="28" required>
-            <small style="color: #718096; font-size: 14px; margin-top: 5px; display: block;">通常为21-35天，默认28天</small>
+        <!-- 计算排卵标签内容 -->
+        <div class="tab-content active" id="calculate-content">
+            <div class="form-group">
+                <label for="lastPeriod">上一次月经开始日期</label>
+                <input type="date" id="lastPeriod" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="cycleLength">本次周期长度（天）</label>
+                <input type="number" id="cycleLength" min="21" max="45" value="28" required>
+                <small style="color: #718096; font-size: 14px; margin-top: 5px; display: block;">根据实际周期填写（21-45天），系统会智能适配历史数据</small>
+            </div>
+            
+            <div class="btn-group">
+                <button id="calculateBtn">计算排卵周期</button>
+                <button id="saveCycleBtn" class="secondary">保存本次周期</button>
+            </div>
+            
+            <div class="note">
+                提示：保存3次以上周期记录后，系统会自动计算平均周期，适配不规律周期的排卵预测
+            </div>
+            
+            <div class="result" id="result">
+                <h2>计算结果</h2>
+                <div class="result-item">历史平均周期：<span id="avgCycle" class="highlight"></span> 天（无历史记录则使用本次周期）</div>
+                <div class="result-item">预计排卵日：<span id="ovulationDay" class="highlight"></span></div>
+                <div class="result-item">排卵期（易孕期）：<span id="fertilePeriod" class="highlight"></span></div>
+                <div class="result-item">相对安全期：<span id="safePeriod"></span></div>
+                <div class="result-item">下一次月经预计：<span id="nextPeriod" class="highlight"></span></div>
+            </div>
         </div>
         
-        <button id="calculateBtn">计算排卵周期</button>
-        
-        <div class="result" id="result">
-            <h2>计算结果</h2>
-            <div class="result-item">预计排卵日：<span id="ovulationDay" class="highlight"></span></div>
-            <div class="result-item">排卵期：<span id="fertilePeriod" class="highlight"></span></div>
-            <div class="result-item">安全期（相对）：<span id="safePeriod"></span></div>
-            <div class="result-item">下一次月经预计：<span id="nextPeriod" class="highlight"></span></div>
+        <!-- 历史记录标签内容 -->
+        <div class="tab-content" id="history-content">
+            <button id="clearAllBtn" class="danger">清空所有记录</button>
+            <div class="history-list" id="historyList">
+                <div class="empty-tip">暂无历史周期记录，快去添加吧~</div>
+            </div>
         </div>
     </div>
 
     <script>
-        // 计算排卵周期核心逻辑
-        document.getElementById('calculateBtn').addEventListener('click', function() {
-            const lastPeriod = new Date(document.getElementById('lastPeriod').value);
+        // 本地存储工具类（数据持久化）
+        const CycleStorage = {
+            // 获取所有历史周期
+            getHistory() {
+                const data = localStorage.getItem('ovulationCycles');
+                return data ? JSON.parse(data) : [];
+            },
+            // 保存周期记录
+            saveCycle(cycle) {
+                const history = this.getHistory();
+                history.unshift(cycle); // 新增记录放在最前面
+                localStorage.setItem('ovulationCycles', JSON.stringify(history));
+                return history;
+            },
+            // 删除单条记录
+            deleteCycle(index) {
+                const history = this.getHistory();
+                history.splice(index, 1);
+                localStorage.setItem('ovulationCycles', JSON.stringify(history));
+                return history;
+            },
+            // 清空所有记录
+            clearAll() {
+                localStorage.removeItem('ovulationCycles');
+                return [];
+            },
+            // 计算平均周期
+            getAverageCycle() {
+                const history = this.getHistory();
+                if (history.length < 1) return null;
+                const total = history.reduce((sum, item) => sum + item.cycleLength, 0);
+                return Math.round(total / history.length); // 四舍五入取整
+            }
+        };
+
+        // 页面初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 标签页切换
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabId = this.getAttribute('data-tab');
+                    // 切换标签激活状态
+                    tabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    // 切换内容显示
+                    document.querySelectorAll('.tab-content').forEach(content => {
+                        content.classList.remove('active');
+                    });
+                    document.getElementById(`${tabId}-content`).classList.add('active');
+                    
+                    // 切换到历史记录时刷新列表
+                    if (tabId === 'history') {
+                        renderHistoryList();
+                    }
+                });
+            });
+
+            // 计算排卵按钮
+            document.getElementById('calculateBtn').addEventListener('click', calculateOvulation);
+            
+            // 保存周期按钮
+            document.getElementById('saveCycleBtn').addEventListener('click', saveCurrentCycle);
+            
+            // 清空所有记录按钮
+            document.getElementById('clearAllBtn').addEventListener('click', function() {
+                if (confirm('确定要清空所有历史记录吗？此操作不可恢复！')) {
+                    CycleStorage.clearAll();
+                    renderHistoryList();
+                }
+            });
+
+            // 初始化历史记录列表
+            renderHistoryList();
+        });
+
+        // 计算排卵逻辑（支持不规律周期）
+        function calculateOvulation() {
+            const lastPeriodStr = document.getElementById('lastPeriod').value;
             const cycleLength = parseInt(document.getElementById('cycleLength').value);
             
             // 验证输入
-            if (!lastPeriod || isNaN(cycleLength)) {
-                alert('请填写完整且有效的信息！');
+            if (!lastPeriodStr || isNaN(cycleLength) || cycleLength < 21 || cycleLength > 45) {
+                alert('请填写完整且有效的信息（周期长度21-45天）！');
                 return;
             }
             
-            // 计算关键日期（排卵日=周期长度-14天）
+            const lastPeriod = new Date(lastPeriodStr);
+            const avgCycle = CycleStorage.getAverageCycle();
+            const useCycle = avgCycle || cycleLength; // 有历史记录则用平均周期，否则用本次输入
+            
+            // 核心日期计算（基于平均周期，更适配不规律情况）
             const ovulationDay = new Date(lastPeriod);
-            ovulationDay.setDate(lastPeriod.getDate() + cycleLength - 14);
+            ovulationDay.setDate(lastPeriod.getDate() + useCycle - 14); // 排卵日=周期-14天（科学公式）
             
-            // 排卵期（排卵日前后4天，共9天）
             const fertileStart = new Date(ovulationDay);
-            fertileStart.setDate(ovulationDay.getDate() - 4);
+            fertileStart.setDate(ovulationDay.getDate() - 4); // 排卵期开始（排卵前4天）
             const fertileEnd = new Date(ovulationDay);
-            fertileEnd.setDate(ovulationDay.getDate() + 4);
+            fertileEnd.setDate(ovulationDay.getDate() + 4); // 排卵期结束（排卵后4天）
             
-            // 下一次月经日期
             const nextPeriod = new Date(lastPeriod);
-            nextPeriod.setDate(lastPeriod.getDate() + cycleLength);
+            nextPeriod.setDate(lastPeriod.getDate() + useCycle); // 下次月经日期
             
-            // 安全期（月经结束后到排卵期前，排卵后到下次月经前）
-            // 假设经期5天（可根据实际调整，这里做通用处理）
+            // 安全期计算（基于经期5天通用假设，可根据实际调整）
             const periodEnd = new Date(lastPeriod);
             periodEnd.setDate(lastPeriod.getDate() + 5);
-            const safe1Start = new Date(lastPeriod);
             const safe1End = new Date(fertileStart);
             safe1End.setDate(fertileStart.getDate() - 1);
             const safe2Start = new Date(fertileEnd);
             safe2Start.setDate(fertileEnd.getDate() + 1);
-            const safe2End = new Date(nextPeriod);
             
             // 格式化日期为YYYY-MM-DD
             function formatDate(date) {
@@ -156,14 +345,77 @@
             }
             
             // 填充结果
+            document.getElementById('avgCycle').textContent = avgCycle || '无（使用本次）';
             document.getElementById('ovulationDay').textContent = formatDate(ovulationDay);
             document.getElementById('fertilePeriod').textContent = `${formatDate(fertileStart)} 至 ${formatDate(fertileEnd)}`;
-            document.getElementById('safePeriod').textContent = `${formatDate(safe1Start)} 至 ${formatDate(safe1End)}、${formatDate(safe2Start)} 至 ${formatDate(safe2End)}`;
+            document.getElementById('safePeriod').textContent = `${formatDate(lastPeriod)} 至 ${formatDate(safe1End)}、${formatDate(safe2Start)} 至 ${formatDate(nextPeriod)}`;
             document.getElementById('nextPeriod').textContent = formatDate(nextPeriod);
             
             // 显示结果
             document.getElementById('result').style.display = 'block';
-        });
+        }
+
+        // 保存当前周期记录
+        function saveCurrentCycle() {
+            const lastPeriodStr = document.getElementById('lastPeriod').value;
+            const cycleLength = parseInt(document.getElementById('cycleLength').value);
+            
+            if (!lastPeriodStr || isNaN(cycleLength) || cycleLength < 21 || cycleLength > 45) {
+                alert('请填写完整且有效的周期信息！');
+                return;
+            }
+            
+            // 构造周期记录对象
+            const cycle = {
+                date: new Date().toISOString().split('T')[0], // 记录保存日期
+                lastPeriod: lastPeriodStr, // 月经开始日期
+                cycleLength: cycleLength // 周期长度
+            };
+            
+            // 保存到本地存储
+            CycleStorage.saveCycle(cycle);
+            alert('本次周期记录保存成功！');
+            
+            // 刷新历史记录列表
+            renderHistoryList();
+        }
+
+        // 渲染历史记录列表
+        function renderHistoryList() {
+            const historyList = document.getElementById('historyList');
+            const history = CycleStorage.getHistory();
+            
+            if (history.length === 0) {
+                historyList.innerHTML = '<div class="empty-tip">暂无历史周期记录，快去添加吧~</div>';
+                return;
+            }
+            
+            // 生成列表HTML
+            let html = `<h2>历史周期记录（共${history.length}条）</h2>`;
+            history.forEach((item, index) => {
+                html += `
+                    <div class="history-item">
+                        <div class="history-info">
+                            <div class="history-date">月经开始：${item.lastPeriod}</div>
+                            <div class="history-cycle">周期长度：${item.cycleLength}天 | 记录时间：${item.date}</div>
+                        </div>
+                        <div class="history-actions">
+                            <button class="secondary" onclick="deleteHistoryItem(${index})">删除</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            historyList.innerHTML = html;
+        }
+
+        // 删除历史记录（暴露到全局供HTML调用）
+        window.deleteHistoryItem = function(index) {
+            if (confirm('确定要删除这条记录吗？')) {
+                CycleStorage.deleteCycle(index);
+                renderHistoryList();
+            }
+        };
     </script>
 </body>
 </html>
