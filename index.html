@@ -1,421 +1,203 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智能排卵周期记录计算器</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Arial', sans-serif;
-        }
-        body {
-            background-color: #f5f7fa;
-            padding: 20px;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            text-align: center;
-            color: #2d3748;
-            margin-bottom: 30px;
-        }
-        .tabs {
-            display: flex;
-            border-bottom: 1px solid #e2e8f0;
-            margin-bottom: 25px;
-        }
-        .tab {
-            padding: 12px 20px;
-            cursor: pointer;
-            color: #4a5568;
-            font-weight: 500;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-        }
-        .tab.active {
-            color: #4299e1;
-            border-bottom-color: #4299e1;
-        }
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #4a5568;
-            font-weight: 500;
-        }
-        input {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            font-size: 16px;
-        }
-        input:focus {
-            outline: none;
-            border-color: #4299e1;
-            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
-        }
-        .btn-group {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        button {
-            padding: 14px;
-            background-color: #4299e1;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.3s;
-            flex: 1;
-        }
-        button:hover {
-            background-color: #3182ce;
-        }
-        button.secondary {
-            background-color: #718096;
-        }
-        button.secondary:hover {
-            background-color: #4a5568;
-        }
-        button.danger {
-            background-color: #e53e3e;
-        }
-        button.danger:hover {
-            background-color: #c53030;
-        }
-        .result, .history-list {
-            margin-top: 20px;
-            padding: 20px;
-            border-radius: 6px;
-            background-color: #f0f8fb;
-        }
-        .history-list {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        .result h2, .history-list h2 {
-            color: #2d3748;
-            margin-bottom: 15px;
-            font-size: 18px;
-        }
-        .result-item {
-            margin-bottom: 10px;
-            color: #4a5568;
-            font-size: 16px;
-        }
-        .highlight {
-            color: #e53e3e;
-            font-weight: 600;
-        }
-        .history-item {
-            padding: 15px;
-            border-bottom: 1px solid #e2e8f0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .history-item:last-child {
-            border-bottom: none;
-        }
-        .history-info {
-            flex: 1;
-        }
-        .history-date {
-            font-weight: 600;
-            color: #2d3748;
-            margin-bottom: 5px;
-        }
-        .history-cycle {
-            color: #718096;
-            font-size: 14px;
-        }
-        .history-actions {
-            display: flex;
-            gap: 8px;
-        }
-        .history-actions button {
-            padding: 6px 10px;
-            font-size: 14px;
-            flex: none;
-        }
-        .empty-tip {
-            text-align: center;
-            padding: 30px;
-            color: #718096;
-            font-size: 16px;
-        }
-        .note {
-            margin-top: 10px;
-            padding: 10px;
-            background-color: #fef7fb;
-            border-radius: 4px;
-            color: #718096;
-            font-size: 14px;
-            border-left: 3px solid #ed8936;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>智能排卵周期记录计算器</h1>
+import datetime
+import calendar
+import pandas as pd
+import numpy as np
+from typing import List, Tuple, Dict, Optional
+import json
+from dataclasses import dataclass
+from enum import Enum
+
+class Method(Enum):
+    CALENDAR = "日历法"
+    BBT = "基础体温法"
+    CM = "宫颈黏液法"
+    LH_TEST = "LH试纸法"
+    B_MODE = "B超监测法"
+
+@dataclass
+class CycleData:
+    """月经周期数据类"""
+    start_date: datetime.date
+    end_date: datetime.date
+    length: int
+    
+@dataclass
+class PredictionResult:
+    """预测结果类"""
+    ovulation_date: datetime.date
+    fertile_window_start: datetime.date
+    fertile_window_end: datetime.date
+    next_period_date: datetime.date
+    confidence: float  # 置信度 (0-1)
+    methods_used: List[Method]
+
+class MenstrualCycleCalculator:
+    """科学排卵周期计算器"""
+    
+    def __init__(self, min_cycles_for_accuracy: int = 3):
+        self.cycle_history: List[CycleData] = []
+        self.min_cycles = min_cycles_for_accuracy
+        self.bbt_data: Dict[datetime.date, float] = {}  # 基础体温数据
+        self.lh_test_data: Dict[datetime.date, float] = {}  # LH试纸数据
         
-        <!-- 标签页 -->
-        <div class="tabs">
-            <div class="tab active" data-tab="calculate">计算排卵</div>
-            <div class="tab" data-tab="history">历史记录</div>
-        </div>
+    def add_cycle(self, start_date: datetime.date, end_date: datetime.date) -> None:
+        """添加月经周期记录"""
+        cycle_length = (end_date - start_date).days
+        if cycle_length < 21 or cycle_length > 45:
+            print(f"警告: 周期长度{cycle_length}天异常，正常范围21-45天")
         
-        <!-- 计算排卵标签内容 -->
-        <div class="tab-content active" id="calculate-content">
-            <div class="form-group">
-                <label for="lastPeriod">上一次月经开始日期</label>
-                <input type="date" id="lastPeriod" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="cycleLength">本次周期长度（天）</label>
-                <input type="number" id="cycleLength" min="21" max="45" value="28" required>
-                <small style="color: #718096; font-size: 14px; margin-top: 5px; display: block;">根据实际周期填写（21-45天），系统会智能适配历史数据</small>
-            </div>
-            
-            <div class="btn-group">
-                <button id="calculateBtn">计算排卵周期</button>
-                <button id="saveCycleBtn" class="secondary">保存本次周期</button>
-            </div>
-            
-            <div class="note">
-                提示：保存3次以上周期记录后，系统会自动计算平均周期，适配不规律周期的排卵预测
-            </div>
-            
-            <div class="result" id="result">
-                <h2>计算结果</h2>
-                <div class="result-item">历史平均周期：<span id="avgCycle" class="highlight"></span> 天（无历史记录则使用本次周期）</div>
-                <div class="result-item">预计排卵日：<span id="ovulationDay" class="highlight"></span></div>
-                <div class="result-item">排卵期（易孕期）：<span id="fertilePeriod" class="highlight"></span></div>
-                <div class="result-item">相对安全期：<span id="safePeriod"></span></div>
-                <div class="result-item">下一次月经预计：<span id="nextPeriod" class="highlight"></span></div>
-            </div>
-        </div>
+        self.cycle_history.append(CycleData(start_date, end_date, cycle_length))
         
-        <!-- 历史记录标签内容 -->
-        <div class="tab-content" id="history-content">
-            <button id="clearAllBtn" class="danger">清空所有记录</button>
-            <div class="history-list" id="historyList">
-                <div class="empty-tip">暂无历史周期记录，快去添加吧~</div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // 本地存储工具类（数据持久化）
-        const CycleStorage = {
-            // 获取所有历史周期
-            getHistory() {
-                const data = localStorage.getItem('ovulationCycles');
-                return data ? JSON.parse(data) : [];
-            },
-            // 保存周期记录
-            saveCycle(cycle) {
-                const history = this.getHistory();
-                history.unshift(cycle); // 新增记录放在最前面
-                localStorage.setItem('ovulationCycles', JSON.stringify(history));
-                return history;
-            },
-            // 删除单条记录
-            deleteCycle(index) {
-                const history = this.getHistory();
-                history.splice(index, 1);
-                localStorage.setItem('ovulationCycles', JSON.stringify(history));
-                return history;
-            },
-            // 清空所有记录
-            clearAll() {
-                localStorage.removeItem('ovulationCycles');
-                return [];
-            },
-            // 计算平均周期
-            getAverageCycle() {
-                const history = this.getHistory();
-                if (history.length < 1) return null;
-                const total = history.reduce((sum, item) => sum + item.cycleLength, 0);
-                return Math.round(total / history.length); // 四舍五入取整
-            }
-        };
-
-        // 页面初始化
-        document.addEventListener('DOMContentLoaded', function() {
-            // 标签页切换
-            const tabs = document.querySelectorAll('.tab');
-            tabs.forEach(tab => {
-                tab.addEventListener('click', function() {
-                    const tabId = this.getAttribute('data-tab');
-                    // 切换标签激活状态
-                    tabs.forEach(t => t.classList.remove('active'));
-                    this.classList.add('active');
-                    // 切换内容显示
-                    document.querySelectorAll('.tab-content').forEach(content => {
-                        content.classList.remove('active');
-                    });
-                    document.getElementById(`${tabId}-content`).classList.add('active');
-                    
-                    // 切换到历史记录时刷新列表
-                    if (tabId === 'history') {
-                        renderHistoryList();
-                    }
-                });
-            });
-
-            // 计算排卵按钮
-            document.getElementById('calculateBtn').addEventListener('click', calculateOvulation);
+    def add_bbt_reading(self, date: datetime.date, temperature: float) -> None:
+        """添加基础体温读数"""
+        self.bbt_data[date] = temperature
+        
+    def add_lh_test_result(self, date: datetime.date, intensity: float) -> None:
+        """添加LH试纸结果(强度0-1)"""
+        self.lh_test_data[date] = intensity
+    
+    def calculate_cycle_stats(self) -> Dict[str, float]:
+        """计算周期统计信息"""
+        if len(self.cycle_history) < 2:
+            return {}
             
-            // 保存周期按钮
-            document.getElementById('saveCycleBtn').addEventListener('click', saveCurrentCycle);
-            
-            // 清空所有记录按钮
-            document.getElementById('clearAllBtn').addEventListener('click', function() {
-                if (confirm('确定要清空所有历史记录吗？此操作不可恢复！')) {
-                    CycleStorage.clearAll();
-                    renderHistoryList();
-                }
-            });
-
-            // 初始化历史记录列表
-            renderHistoryList();
-        });
-
-        // 计算排卵逻辑（支持不规律周期）
-        function calculateOvulation() {
-            const lastPeriodStr = document.getElementById('lastPeriod').value;
-            const cycleLength = parseInt(document.getElementById('cycleLength').value);
-            
-            // 验证输入
-            if (!lastPeriodStr || isNaN(cycleLength) || cycleLength < 21 || cycleLength > 45) {
-                alert('请填写完整且有效的信息（周期长度21-45天）！');
-                return;
-            }
-            
-            const lastPeriod = new Date(lastPeriodStr);
-            const avgCycle = CycleStorage.getAverageCycle();
-            const useCycle = avgCycle || cycleLength; // 有历史记录则用平均周期，否则用本次输入
-            
-            // 核心日期计算（基于平均周期，更适配不规律情况）
-            const ovulationDay = new Date(lastPeriod);
-            ovulationDay.setDate(lastPeriod.getDate() + useCycle - 14); // 排卵日=周期-14天（科学公式）
-            
-            const fertileStart = new Date(ovulationDay);
-            fertileStart.setDate(ovulationDay.getDate() - 4); // 排卵期开始（排卵前4天）
-            const fertileEnd = new Date(ovulationDay);
-            fertileEnd.setDate(ovulationDay.getDate() + 4); // 排卵期结束（排卵后4天）
-            
-            const nextPeriod = new Date(lastPeriod);
-            nextPeriod.setDate(lastPeriod.getDate() + useCycle); // 下次月经日期
-            
-            // 安全期计算（基于经期5天通用假设，可根据实际调整）
-            const periodEnd = new Date(lastPeriod);
-            periodEnd.setDate(lastPeriod.getDate() + 5);
-            const safe1End = new Date(fertileStart);
-            safe1End.setDate(fertileStart.getDate() - 1);
-            const safe2Start = new Date(fertileEnd);
-            safe2Start.setDate(fertileEnd.getDate() + 1);
-            
-            // 格式化日期为YYYY-MM-DD
-            function formatDate(date) {
-                return date.toISOString().split('T')[0];
-            }
-            
-            // 填充结果
-            document.getElementById('avgCycle').textContent = avgCycle || '无（使用本次）';
-            document.getElementById('ovulationDay').textContent = formatDate(ovulationDay);
-            document.getElementById('fertilePeriod').textContent = `${formatDate(fertileStart)} 至 ${formatDate(fertileEnd)}`;
-            document.getElementById('safePeriod').textContent = `${formatDate(lastPeriod)} 至 ${formatDate(safe1End)}、${formatDate(safe2Start)} 至 ${formatDate(nextPeriod)}`;
-            document.getElementById('nextPeriod').textContent = formatDate(nextPeriod);
-            
-            // 显示结果
-            document.getElementById('result').style.display = 'block';
+        lengths = [c.length for c in self.cycle_history]
+        
+        stats = {
+            "average_length": np.mean(lengths),
+            "min_length": np.min(lengths),
+            "max_length": np.max(lengths),
+            "std_dev": np.std(lengths),
+            "regularity": "规律" if np.std(lengths) <= 7 else "不规律"
         }
-
-        // 保存当前周期记录
-        function saveCurrentCycle() {
-            const lastPeriodStr = document.getElementById('lastPeriod').value;
-            const cycleLength = parseInt(document.getElementById('cycleLength').value);
+        
+        return stats
+    
+    def predict_by_calendar(self, last_period_date: datetime.date) -> PredictionResult:
+        """日历法预测"""
+        if len(self.cycle_history) < self.min_cycles:
+            print(f"警告: 至少需要{self.min_cycles}个周期记录以提高准确性")
             
-            if (!lastPeriodStr || isNaN(cycleLength) || cycleLength < 21 || cycleLength > 45) {
-                alert('请填写完整且有效的周期信息！');
-                return;
-            }
+        stats = self.calculate_cycle_stats()
+        
+        if not stats:
+            # 默认使用28天周期
+            avg_cycle = 28
+            min_cycle = 26
+            max_cycle = 30
+        else:
+            avg_cycle = int(stats["average_length"])
+            min_cycle = int(stats["min_length"])
+            max_cycle = int(stats["max_length"])
+        
+        # 计算下次月经日期
+        next_period = last_period_date + datetime.timedelta(days=avg_cycle)
+        
+        # 排卵日 = 下次月经前14天
+        ovulation_day = next_period - datetime.timedelta(days=14)
+        
+        # 受孕窗口期 = 排卵前5天至排卵后1天
+        fertile_start = ovulation_day - datetime.timedelta(days=5)
+        fertile_end = ovulation_day + datetime.timedelta(days=1)
+        
+        # 置信度计算
+        if stats:
+            regularity_factor = 1.0 if stats["regularity"] == "规律" else 0.6
+            data_quality = min(len(self.cycle_history) / 6.0, 1.0)  # 最多6个周期
+            confidence = 0.6 * regularity_factor * data_quality
+        else:
+            confidence = 0.3
+        
+        return PredictionResult(
+            ovulation_date=ovulation_day,
+            fertile_window_start=fertile_start,
+            fertile_window_end=fertile_end,
+            next_period_date=next_period,
+            confidence=confidence,
+            methods_used=[Method.CALENDAR]
+        )
+    
+    def detect_ovulation_by_bbt(self) -> Optional[datetime.date]:
+        """通过基础体温检测排卵"""
+        if len(self.bbt_data) < 10:  # 至少10天数据
+            return None
             
-            // 构造周期记录对象
-            const cycle = {
-                date: new Date().toISOString().split('T')[0], // 记录保存日期
-                lastPeriod: lastPeriodStr, // 月经开始日期
-                cycleLength: cycleLength // 周期长度
-            };
+        # 将数据转换为DataFrame以便分析
+        dates = sorted(self.bbt_data.keys())
+        temps = [self.bbt_data[d] for d in dates]
+        
+        # 寻找体温上升点
+        ovulation_date = None
+        for i in range(1, len(temps)):
+            if temps[i] - temps[i-1] >= 0.3:  # 体温上升0.3℃以上
+                ovulation_date = dates[i-1]  # 排卵发生在体温上升前一天
+                break
+                
+        return ovulation_date
+    
+    def detect_ovulation_by_lh_test(self) -> Optional[datetime.date]:
+        """通过LH试纸检测排卵"""
+        if not self.lh_test_data:
+            return None
             
-            // 保存到本地存储
-            CycleStorage.saveCycle(cycle);
-            alert('本次周期记录保存成功！');
+        # 寻找LH峰值（强度>0.8）
+        peak_dates = [date for date, intensity in self.lh_test_data.items() if intensity >= 0.8]
+        
+        if not peak_dates:
+            return None
             
-            // 刷新历史记录列表
-            renderHistoryList();
-        }
-
-        // 渲染历史记录列表
-        function renderHistoryList() {
-            const historyList = document.getElementById('historyList');
-            const history = CycleStorage.getHistory();
+        # 返回第一个峰值日期（排卵发生在峰值后24-48小时）
+        return min(peak_dates)
+    
+    def comprehensive_prediction(self, last_period_date: datetime.date) -> PredictionResult:
+        """综合预测（推荐方法）"""
+        # 基础日历法预测
+        calendar_pred = self.predict_by_calendar(last_period_date)
+        
+        methods_used = [Method.CALENDAR]
+        confidence_boost = 0.0
+        
+        # 检查基础体温数据
+        bbt_ovulation = self.detect_ovulation_by_bbt()
+        if bbt_ovulation:
+            methods_used.append(Method.BBT)
+            # 验证日历法预测
+            days_diff = abs((bbt_ovulation - calendar_pred.ovulation_date).days)
+            if days_diff <= 2:
+                confidence_boost += 0.2
+            else:
+                # 如果差异大，使用体温法结果调整
+                calendar_pred.ovulation_date = bbt_ovulation
+                calendar_pred.fertile_window_start = bbt_ovulation - datetime.timedelta(days=5)
+                calendar_pred.fertile_window_end = bbt_ovulation + datetime.timedelta(days=1)
+                confidence_boost += 0.15
+        
+        # 检查LH试纸数据
+        lh_ovulation = self.detect_ovulation_by_lh_test()
+        if lh_ovulation:
+            methods_used.append(Method.LH_TEST)
+            lh_ovulation_date = lh_ovulation + datetime.timedelta(days=1)  # LH峰值后24小时排卵
             
-            if (history.length === 0) {
-                historyList.innerHTML = '<div class="empty-tip">暂无历史周期记录，快去添加吧~</div>';
-                return;
-            }
-            
-            // 生成列表HTML
-            let html = `<h2>历史周期记录（共${history.length}条）</h2>`;
-            history.forEach((item, index) => {
-                html += `
-                    <div class="history-item">
-                        <div class="history-info">
-                            <div class="history-date">月经开始：${item.lastPeriod}</div>
-                            <div class="history-cycle">周期长度：${item.cycleLength}天 | 记录时间：${item.date}</div>
-                        </div>
-                        <div class="history-actions">
-                            <button class="secondary" onclick="deleteHistoryItem(${index})">删除</button>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            historyList.innerHTML = html;
-        }
-
-        // 删除历史记录（暴露到全局供HTML调用）
-        window.deleteHistoryItem = function(index) {
-            if (confirm('确定要删除这条记录吗？')) {
-                CycleStorage.deleteCycle(index);
-                renderHistoryList();
-            }
-        };
-    </script>
-</body>
-</html>
+            days_diff = abs((lh_ovulation_date - calendar_pred.ovulation_date).days)
+            if days_diff <= 1:
+                confidence_boost += 0.25
+            else:
+                # 使用LH试纸结果
+                calendar_pred.ovulation_date = lh_ovulation_date
+                calendar_pred.fertile_window_start = lh_ovulation_date - datetime.timedelta(days=5)
+                calendar_pred.fertile_window_end = lh_ovulation_date + datetime.timedelta(days=1)
+                confidence_boost += 0.2
+        
+        # 更新置信度
+        calendar_pred.confidence = min(calendar_pred.confidence + confidence_boost, 0.95)
+        calendar_pred.methods_used = methods_used
+        
+        return calendar_pred
+    
+    def generate_calendar_view(self, start_date: datetime.date, months: int = 3) -> str:
+        """生成日历视图"""
+        calendar_view = []
+        current_date = start_date
+        
+        for _ in range(months):
+     
