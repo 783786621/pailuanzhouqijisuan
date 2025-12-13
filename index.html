@@ -98,6 +98,8 @@
             font-size: 16px;
             cursor: pointer;
             transition: background 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
         }
         .btn:hover {
             background: #236b8e;
@@ -107,6 +109,19 @@
         }
         .btn-secondary:hover {
             background: #5a6268;
+        }
+        .btn-edit {
+            background: #ffc107;
+            color: #333;
+        }
+        .btn-edit:hover {
+            background: #e0a800;
+        }
+        .btn-delete {
+            background: #dc3545;
+        }
+        .btn-delete:hover {
+            background: #c82333;
         }
         .result-card {
             background: #f8f9fa;
@@ -172,6 +187,8 @@
             border-radius: 12px;
             font-size: 12px;
             font-weight: 500;
+            margin-right: 5px;
+            margin-bottom: 5px;
         }
         .badge-ovulation {
             background: #ffc107;
@@ -184,6 +201,53 @@
         .badge-period {
             background: #dc3545;
             color: white;
+        }
+        .badge-fertile {
+            background: #dc3545;
+            color: white;
+        }
+        /* 编辑模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 500px;
+            padding: 25px;
+            position: relative;
+        }
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 20px;
+            cursor: pointer;
+            color: #999;
+        }
+        .modal-close:hover {
+            color: #333;
+        }
+        .modal-title {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .period-status {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
         }
         @media (max-width: 768px) {
             .tabs {
@@ -201,6 +265,10 @@
             }
             .tab-content {
                 padding: 15px;
+            }
+            .btn {
+                padding: 10px 16px;
+                font-size: 14px;
             }
         }
     </style>
@@ -260,8 +328,14 @@
                     <div class="result-item"><span class="result-label">当前周期：</span> <span id="calcCycleStart"></span></div>
                     <div class="result-item"><span class="result-label">平均周期长度：</span> <span id="calcAvgCycle"></span> 天</div>
                     <div class="result-item"><span class="result-label">排卵日预测：</span> <span id="calcOvulationDay" class="badge badge-ovulation"></span></div>
-                    <div class="result-item"><span class="result-label">排卵期（易受孕）：</span> <span id="calcOvulationPeriod" class="badge badge-ovulation"></span></div>
-                    <div class="result-item"><span class="result-label">安全期（参考）：</span> <span id="calcSafePeriod"></span></div>
+                    <div class="result-item">
+                        <span class="result-label">易受孕期（高受孕率）：</span>
+                        <div id="calcFertilePeriod" class="period-status"></div>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">安全期（参考）：</span>
+                        <div id="calcSafePeriod" class="period-status"></div>
+                    </div>
                     <div class="result-item"><span class="result-label">下次月经预测：</span> <span id="calcNextPeriod"></span></div>
                     <div class="result-item warning">⚠️ 提示：安全期仅为参考，非绝对避孕；排卵可能因情绪、压力等因素波动±1-2天</div>
                 </div>
@@ -289,6 +363,7 @@
                             <th>月经结束</th>
                             <th>经期天数</th>
                             <th>周期长度</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="statsTableBody"></tbody>
@@ -308,6 +383,37 @@
                     <canvas id="cycleChart"></canvas>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- 编辑周期模态框 -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <span class="modal-close" id="modalClose">&times;</span>
+            <h3 class="modal-title">编辑周期记录</h3>
+            <input type="hidden" id="editCycleId">
+            <div class="form-group">
+                <label for="editStartDate">月经第一天 <span style="color: #dc3545;">*</span></label>
+                <input type="date" id="editStartDate" required>
+            </div>
+            <div class="form-group">
+                <label for="editEndDateOption">月经结束日期设置</label>
+                <select id="editEndDateOption">
+                    <option value="auto">自动计算（默认5天经期）</option>
+                    <option value="manual">手动输入</option>
+                </select>
+            </div>
+            <div class="form-group" id="editEndDateGroup" style="display: none;">
+                <label for="editEndDate">月经最后一天 <span style="color: #dc3545;">*</span></label>
+                <input type="date" id="editEndDate">
+            </div>
+            <div class="form-group" id="editPeriodLengthGroup">
+                <label for="editPeriodLength">经期长度（天）</label>
+                <input type="number" id="editPeriodLength" min="2" max="10" value="5">
+                <p class="warning">默认5天，一般经期为2-10天</p>
+            </div>
+            <button class="btn" id="saveEditBtn">保存修改</button>
+            <button class="btn btn-secondary" id="cancelEditBtn">取消</button>
         </div>
     </div>
 
@@ -336,6 +442,12 @@
             formatDate(dateStr) {
                 const date = new Date(dateStr);
                 return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+            }
+
+            // 格式化日期为短格式（用于输入框）
+            formatDateShort(dateStr) {
+                const date = new Date(dateStr);
+                return date.toISOString().split('T')[0];
             }
 
             // 计算日期加减
@@ -409,19 +521,31 @@
                 const safe2Start = this.addDays(ovulationEnd, 1);
                 const safe2End = this.addDays(nextPeriod, -1);
 
-                const safe1 = safe1Start <= safe1End 
-                    ? `${this.formatDate(safe1Start)} ~ ${this.formatDate(safe1End)}` 
-                    : '无';
-                const safe2 = safe2Start <= safe2End 
-                    ? `${this.formatDate(safe2Start)} ~ ${this.formatDate(safe2End)}` 
-                    : '无';
+                // 处理安全期显示
+                const safePeriods = [];
+                if (safe1Start <= safe1End) {
+                    safePeriods.push({
+                        text: `${this.formatDate(safe1Start)} ~ ${this.formatDate(safe1End)}`,
+                        type: '前安全期'
+                    });
+                }
+                if (safe2Start <= safe2End) {
+                    safePeriods.push({
+                        text: `${this.formatDate(safe2Start)} ~ ${this.formatDate(safe2End)}`,
+                        type: '后安全期'
+                    });
+                }
 
                 return {
                     cycle_start: this.formatDate(startDate),
                     average_cycle_length: avgCycle,
                     ovulation_day: this.formatDate(ovulationDay),
-                    ovulation_period: `${this.formatDate(ovulationStart)} ~ ${this.formatDate(ovulationEnd)}`,
-                    safe_period: `前安全期：${safe1} | 后安全期：${safe2}`,
+                    ovulation_period: {
+                        start: this.formatDate(ovulationStart),
+                        end: this.formatDate(ovulationEnd),
+                        text: `${this.formatDate(ovulationStart)} ~ ${this.formatDate(ovulationEnd)}`
+                    },
+                    safe_periods: safePeriods,
                     next_period_prediction: this.formatDate(nextPeriod)
                 };
             }
@@ -442,6 +566,8 @@
                         id: c.id,
                         start_date: this.formatDate(c.start_date),
                         end_date: this.formatDate(c.end_date),
+                        start_date_short: this.formatDateShort(c.start_date),
+                        end_date_short: this.formatDateShort(c.end_date),
                         period_length: c.period_length,
                         cycle_length: c.cycle_length || '—'
                     }))
@@ -458,6 +584,72 @@
                     data: validCycles.map(c => c.cycle_length),
                     avg: this.data.average_cycle_length
                 };
+            }
+
+            // 根据ID获取周期
+            getCycleById(cycleId) {
+                return this.data.cycles.find(c => c.id === cycleId) || null;
+            }
+
+            // 更新周期
+            updateCycle(cycleId, newStartDate, newEndDate) {
+                const cycleIndex = this.data.cycles.findIndex(c => c.id === cycleId);
+                if (cycleIndex === -1) return null;
+
+                const oldCycle = this.data.cycles[cycleIndex];
+                const newPeriodLength = this.getDaysBetween(newStartDate, newEndDate);
+
+                // 更新当前周期
+                const updatedCycle = {
+                    ...oldCycle,
+                    start_date: newStartDate,
+                    end_date: newEndDate,
+                    period_length: newPeriodLength
+                };
+
+                this.data.cycles[cycleIndex] = updatedCycle;
+
+                // 更新后续周期的周期长度
+                this.updateSubsequentCycleLengths(cycleIndex);
+
+                // 更新平均周期长度
+                this.updateAverageCycleLength();
+                this.saveData();
+
+                return updatedCycle;
+            }
+
+            // 更新后续周期的周期长度
+            updateSubsequentCycleLengths(startIndex) {
+                const cycles = this.data.cycles;
+                for (let i = startIndex + 1; i < cycles.length; i++) {
+                    const prevStart = cycles[i - 1].start_date;
+                    const currentStart = cycles[i].start_date;
+                    cycles[i].cycle_length = this.getDaysBetween(prevStart, currentStart) - 1;
+                }
+            }
+
+            // 删除周期
+            deleteCycle(cycleId) {
+                const cycleIndex = this.data.cycles.findIndex(c => c.id === cycleId);
+                if (cycleIndex === -1) return false;
+
+                // 删除周期
+                this.data.cycles.splice(cycleIndex, 1);
+
+                // 重新编号
+                this.data.cycles.forEach((cycle, index) => {
+                    cycle.id = index + 1;
+                });
+
+                // 更新后续周期的周期长度
+                this.updateSubsequentCycleLengths(Math.max(0, cycleIndex - 1));
+
+                // 更新平均周期长度
+                this.updateAverageCycleLength();
+                this.saveData();
+
+                return true;
             }
         }
 
@@ -485,10 +677,24 @@
             });
         });
 
-        // 结束日期选项切换
+        // 结束日期选项切换（新增表单）
         document.getElementById('endDateOption').addEventListener('change', (e) => {
             const endDateGroup = document.getElementById('endDateGroup');
             const periodLengthGroup = document.getElementById('periodLengthGroup');
+            
+            if (e.target.value === 'manual') {
+                endDateGroup.style.display = 'block';
+                periodLengthGroup.style.display = 'none';
+            } else {
+                endDateGroup.style.display = 'none';
+                periodLengthGroup.style.display = 'block';
+            }
+        });
+
+        // 结束日期选项切换（编辑表单）
+        document.getElementById('editEndDateOption').addEventListener('change', (e) => {
+            const endDateGroup = document.getElementById('editEndDateGroup');
+            const periodLengthGroup = document.getElementById('editPeriodLengthGroup');
             
             if (e.target.value === 'manual') {
                 endDateGroup.style.display = 'block';
@@ -553,7 +759,7 @@
             updateChartTab();
         });
 
-        // 更新排卵计算标签页
+        // 更新排卵计算标签页（优化易受孕期/安全期显示）
         function updateCalculateTab() {
             const result = tracker.calculateOvulation();
             const emptyEl = document.getElementById('calculateEmpty');
@@ -569,13 +775,38 @@
                 document.getElementById('calcCycleStart').textContent = result.cycle_start;
                 document.getElementById('calcAvgCycle').textContent = result.average_cycle_length;
                 document.getElementById('calcOvulationDay').textContent = result.ovulation_day;
-                document.getElementById('calcOvulationPeriod').textContent = result.ovulation_period;
-                document.getElementById('calcSafePeriod').textContent = result.safe_period;
                 document.getElementById('calcNextPeriod').textContent = result.next_period_prediction;
+
+                // 渲染易受孕期
+                const fertilePeriodEl = document.getElementById('calcFertilePeriod');
+                fertilePeriodEl.innerHTML = '';
+                const fertileBadge = document.createElement('span');
+                fertileBadge.className = 'badge badge-fertile';
+                fertileBadge.textContent = `${result.ovulation_period.start} ~ ${result.ovulation_period.end}`;
+                fertilePeriodEl.appendChild(fertileBadge);
+
+                // 渲染安全期
+                const safePeriodEl = document.getElementById('calcSafePeriod');
+                safePeriodEl.innerHTML = '';
+                if (result.safe_periods.length > 0) {
+                    result.safe_periods.forEach(period => {
+                        const safeBadge = document.createElement('span');
+                        safeBadge.className = 'badge badge-safe';
+                        safeBadge.textContent = `${period.type}：${period.text}`;
+                        safePeriodEl.appendChild(safeBadge);
+                    });
+                } else {
+                    const noSafeBadge = document.createElement('span');
+                    noSafeBadge.className = 'badge';
+                    noSafeBadge.style.backgroundColor = '#ccc';
+                    noSafeBadge.style.color = '#333';
+                    noSafeBadge.textContent = '无安全期（周期过短）';
+                    safePeriodEl.appendChild(noSafeBadge);
+                }
             }
         }
 
-        // 更新统计标签页
+        // 更新统计标签页（新增编辑/删除功能）
         function updateStatsTab() {
             const stats = tracker.getStats();
             const emptyEl = document.getElementById('statsEmpty');
@@ -603,11 +834,116 @@
                         <td>${cycle.end_date}</td>
                         <td>${cycle.period_length}</td>
                         <td>${cycle.cycle_length}</td>
+                        <td>
+                            <button class="btn btn-edit" data-id="${cycle.id}">编辑</button>
+                            <button class="btn btn-delete" data-id="${cycle.id}">删除</button>
+                        </td>
                     `;
                     tableBody.appendChild(tr);
                 });
+
+                // 绑定编辑按钮事件
+                document.querySelectorAll('.btn-edit').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const cycleId = parseInt(e.target.getAttribute('data-id'));
+                        openEditModal(cycleId);
+                    });
+                });
+
+                // 绑定删除按钮事件
+                document.querySelectorAll('.btn-delete').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const cycleId = parseInt(e.target.getAttribute('data-id'));
+                        if (confirm(`确定要删除周期ID ${cycleId} 的记录吗？`)) {
+                            const success = tracker.deleteCycle(cycleId);
+                            if (success) {
+                                alert('删除成功！');
+                                updateStatsTab();
+                                updateCalculateTab();
+                                updateChartTab();
+                            } else {
+                                alert('删除失败，未找到该周期！');
+                            }
+                        }
+                    });
+                });
             }
         }
+
+        // 打开编辑模态框
+        function openEditModal(cycleId) {
+            const cycle = tracker.getCycleById(cycleId);
+            if (!cycle) {
+                alert('未找到该周期记录！');
+                return;
+            }
+
+            // 填充表单数据
+            document.getElementById('editCycleId').value = cycle.id;
+            document.getElementById('editStartDate').value = tracker.formatDateShort(cycle.start_date);
+            document.getElementById('editEndDate').value = tracker.formatDateShort(cycle.end_date);
+            document.getElementById('editPeriodLength').value = cycle.period_length;
+
+            // 显示模态框
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        // 关闭编辑模态框
+        document.getElementById('modalClose').addEventListener('click', () => {
+            document.getElementById('editModal').style.display = 'none';
+        });
+
+        document.getElementById('cancelEditBtn').addEventListener('click', () => {
+            document.getElementById('editModal').style.display = 'none';
+        });
+
+        // 点击模态框外部关闭
+        window.addEventListener('click', (e) => {
+            if (e.target === document.getElementById('editModal')) {
+                document.getElementById('editModal').style.display = 'none';
+            }
+        });
+
+        // 保存编辑
+        document.getElementById('saveEditBtn').addEventListener('click', () => {
+            const cycleId = parseInt(document.getElementById('editCycleId').value);
+            const startDate = document.getElementById('editStartDate').value;
+            const endDateOption = document.getElementById('editEndDateOption').value;
+            let endDate = '';
+
+            if (!startDate) {
+                alert('请选择月经第一天！');
+                return;
+            }
+
+            // 计算结束日期
+            if (endDateOption === 'manual') {
+                endDate = document.getElementById('editEndDate').value;
+                if (!endDate) {
+                    alert('请选择月经最后一天！');
+                    return;
+                }
+                if (new Date(endDate) < new Date(startDate)) {
+                    alert('结束日期不能早于开始日期！');
+                    return;
+                }
+            } else {
+                const periodLength = parseInt(document.getElementById('editPeriodLength').value);
+                endDate = tracker.addDays(startDate, periodLength - 1);
+            }
+
+            // 更新周期
+            const updatedCycle = tracker.updateCycle(cycleId, startDate, endDate);
+            if (updatedCycle) {
+                alert('修改成功！');
+                document.getElementById('editModal').style.display = 'none';
+                updateStatsTab();
+                updateCalculateTab();
+                updateChartTab();
+            } else {
+                alert('修改失败，未找到该周期！');
+            }
+        });
 
         // 更新图表标签页
         function updateChartTab() {
